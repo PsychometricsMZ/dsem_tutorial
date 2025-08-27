@@ -1,4 +1,4 @@
-This tutorial includes all code examples from Faleh, R., Morelli, S., Andriamiarana, V., Zachary, R. J., Flückiger, C., Brandt, H. (in prep.), Evaluating Psychometric test properties in intensive longitudinal data using dynamic structural equation models.
+This tutorial includes all code examples from Faleh, R., Morelli, S., Andriamiarana, V., Zachary, R. J., Flückiger, C., Brandt, H. https://arxiv.org/abs/2508.12983, Evaluating Psychometric test properties in intensive longitudinal data using dynamic structural equation models.
 
 ### Data
 
