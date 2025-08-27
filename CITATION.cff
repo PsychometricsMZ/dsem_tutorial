@@ -1,0 +1,51 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "Dynamic Latent Class Structural Equation Modeling: A Hands-On Tutorial for Modeling Intensive Longitudinal Data"
+abstract: "Code and materials for a tutorial on Dynamic Latent Class Structural Equation Modeling (DLCSEM) implemented in JAGS."
+authors:
+  - family-names: Faleh
+    given-names: Roberto
+  - family-names: Morelli
+    given-names: Sofia
+  - family-names: Andriamiarana
+    given-names: Vivato
+  - family-names: Roman
+    given-names: Zachary J.
+  - family-names: Flückiger
+    given-names: Christoph
+  - family-names: Brandt
+    given-names: Holger
+license: MIT
+version: "1.0.0"
+date-released: "2025-08-27"
+repository-code: "https://github.com/PsychometricsMZ/dsem_tutorial"
+url: "https://github.com/PsychometricsMZ/dsem_tutorial"
+keywords:
+  - DLCSEM
+  - dynamic latent class
+  - structural equation modeling
+  - JAGS
+  - Bayesian
+identifiers:
+  - type: doi
+    value: 10.48550/arXiv.2508.12983
+preferred-citation:
+  type: article
+  title: "Dynamic Latent Class Structural Equation Modeling: A Hands-On Tutorial for Modeling Intensive Longitudinal Data"
+  authors:
+    - family-names: Faleh
+      given-names: Roberto
+    - family-names: Morelli
+      given-names: Sofia
+    - family-names: Andriamiarana
+      given-names: Vivato
+    - family-names: Roman
+      given-names: Zachary J.
+    - family-names: Flückiger
+      given-names: Christoph
+    - family-names: Brandt
+      given-names: Holger
+  year: 2025
+  journal: "arXiv"
+  doi: 10.48550/arXiv.2508.12983
+  url: "https://doi.org/10.48550/arXiv.2508.12983"
