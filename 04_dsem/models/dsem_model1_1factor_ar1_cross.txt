@@ -1,0 +1,162 @@
+#################################################################
+  # AR(1) 2-level model for one latent factor
+  # with person-specific random intercept and slope
+#################################################################
+
+model{
+
+  ###############################################################
+    # Likelihood (model definition)
+  ###############################################################
+  for(t in 2:Nt){
+  
+    ########################## level 3 ##########################
+
+    # Let the time-specific random slope follow a 
+    # normal distribution
+    zeta3[t] ~ dnorm(0, psi.zeta3)
+
+  }    
+  
+  # Loop through the number of participants/patients 1...N
+  for(i in 1:N){
+
+    ########################## level 2 ##########################
+    
+    # Let the person-specific random intercept and slope 
+    # follow a multivariate normal distribution 
+    # with mean vector mu.zeta2[1:2] and 
+    # precision matrix psi.zeta2[1:2,1:2]
+    zeta2[i, 1:2] ~ dmnorm(mu.zeta2[1:2], psi.zeta2[1:2, 1:2])
+
+    ########################## level 1 ##########################
+
+    # Loop through each time point t = 1...Nt
+    for(t in 1:Nt){
+      for(j in 1:3){
+        # Let the outcome y of indicator j (BAI items)
+        # at time t follow a normal distribution
+        # with mean mu.y[i, t, j] and precision psi.y[j]
+        y[i, t, j] ~ dnorm(mu.y[i, t, j], psi.y[j])
+      }
+
+      # Let latent factor eta at time t for person i
+      # follow a normal distribution with mean mu.eta[i,t] and 
+      # precision psi.eta
+      eta[i, t] ~ dnorm(mu.eta[i, t], psi.eta)
+    }
+
+    ####################### Time structure #######################
+
+    # Add random intercept zeta2[i, 1] to AR(1) parameter alpha
+    # to define a new alpha parameter
+    alpha.new[i] <- alpha + zeta2[i, 1]
+
+    # Add random slope zeta2[i,2] to AR(1) parameter beta
+    # to define a new beta parameter
+    #beta.new[i] <- beta + zeta2[i, 2]
+    
+    # Set the mean of the factor eta  at t=1 (intercept)
+    # to the new alpha parameter
+    mu.eta[i, 1] <- alpha.new[i]
+
+    # Define the mean structure of the outcome for t>1
+    # Loop through time points 2...Nt
+    for(t in 2:Nt){
+      # Define the centered version of factor eta at time t-1
+      # by subtracting the intercept
+      eta.center[i, t-1] <- eta[i,t-1] - alpha.new[i]
+      
+      # to AR(1) parameter beta to define a new beta parameter
+      beta.new[i, t] <- beta + zeta2[i, 2] + zeta3[t]
+      
+      # Let the mean of factor eta  follow an AR(1) structure
+      mu.eta[i, t] <- alpha.new[i] + beta.new[i,t] * eta.center[i, t-1]
+    }
+    
+    ###################### Factor structure #######################
+  
+    # Loop through time points t = 1...Nt
+    # and define the mean structure for the Factor structure 
+    # (invariant over time, no AR structure)
+    for(t in 1:Nt){
+      # Let the factor eta load on indicators 10 to 12 (BAI scale)
+      # using the first indicator for scaling
+      mu.y[i, t, 1] <- eta[i, t]
+      mu.y[i, t, 2] <- nu.y[1] + lambda.y[1] * eta[i, t]
+      mu.y[i, t, 3] <- nu.y[2] + lambda.y[2] * eta[i, t]
+    }
+
+  }
+
+
+  ###############################################################
+    # Priors
+  ###############################################################
+
+  # Loop through each indicator j = 1..3
+  for(j in 1:3){
+    # Let the residual precision of indicator j 
+    # follow a gamma distribution
+    psi.y[j] ~ dgamma(1, 1)
+  }
+  
+  # Let the precision of factor eta
+  # follow a gamma distribution
+  psi.eta ~ dgamma(1, 1)
+
+  # Let the precision of random effects follow a 
+  # Wishart distribution
+  psi.zeta2[1:2, 1:2] ~ dwish(psi0, 2)
+  
+  psi.zeta3 ~ dgamma(1, 1)
+  ####################### Time structure ########################
+
+  # Let the intercept alpha follow a normal distribution
+  alpha ~ dnorm(0, 0.1)
+  # Let the autoregressive coefficient beta follow 
+  # a uniform distribution
+  beta  ~ dunif(-1, 1)
+  
+  ###################### Factor structure #######################
+
+  # Loop through free factor loadings and intercepts l = 1..2
+  for(l in 1:2){
+    # Let each factor loading follow a normal distribution
+    # truncated from below at 0
+    lambda.y[l] ~ dnorm(0.5, 1)I(0,)
+    # Let each factor loading follow a normal distribution
+    nu.y[l] ~ dnorm(0, 0.01)
+  }
+
+
+  ###############################################################
+    # Transformations to obtain (co)variances
+  ###############################################################
+  
+  # Loop through each indicator j = 1..3
+  for(j in 1:3){
+    # Calculate the residual variance of indicator j
+    sigma.y[j] <- 1 / psi.y[j]
+  }
+  
+  # Calculate the variance of factor eta
+  sigma.eta <- 1 / psi.eta
+
+  # Calculate the covariance matrix of the random effects
+  sigma.zeta2[1:2, 1:2] <- inverse(psi.zeta2[1:2, 1:2])
+  sigma.zeta3 <- 1/psi.zeta3
+
+  # Calculate correlation matrix of the random effects
+  # Loop through number of random effects 1...2
+  for(k in 1:2){
+    # Loop through number of random effects 1...2 again
+    for(j in 1:2){
+      # Calculate the correlation between random effect k and j
+      # by dividing their covariance sigma.zeta2[k,j] by the
+      # square root of the product of their variances
+      rho.zeta2[k,j] <- sigma.zeta2[k,j] / sqrt(sigma.zeta2[k,k] 
+                                              * sigma.zeta2[j,j])
+    }
+  }
+}

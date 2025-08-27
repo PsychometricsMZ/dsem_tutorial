@@ -1,0 +1,59 @@
+#################################################################
+  # AR(1) model for a single item (directly observed outcome)
+  # of a single person
+#################################################################
+
+model{
+
+  ###############################################################
+    # Likelihood (model definition)
+  ###############################################################
+
+  # Loop through time points t = 1...Nt
+  for(t in 1:Nt){
+    # Let the outcome y (item 1) at time t 
+    # follow a normal distribution
+    y[t] ~ dnorm(mu.y[t], psi.y)
+  }
+
+  ####################### Time structure ########################
+  
+  # Set the mean of the outcome y at t=1 (intercept)
+  # to the alpha parameter
+  mu.y[1] <- alpha
+  
+  # Loop through time points t = 2...Nt
+  # and define the mean structure of the outcome y for t>1
+  for(t in 2:Nt){
+    # Define the centered version of outcome y at time t-1
+    # by subtracting the intercept
+    y.center[t-1] <- y[t-1] - alpha
+    # Let the mean of outcome y follow an AR(1) structure
+    mu.y[t] <- alpha + beta * y.center[t-1] 
+  }
+
+
+  ###############################################################
+    # Priors
+  ###############################################################
+
+  # Let the residual precision follow a gamma distribution
+  psi.y ~ dgamma(1, 1)
+
+  ####################### Time structure ########################
+  
+  # Let the intercept alpha follow a normal distribution
+  alpha ~ dnorm(0, 0.1)
+  # Let the autoregressive coefficient beta follow 
+  # a uniform distribution
+  beta  ~ dunif(-1, 1)
+
+  
+  ###############################################################
+    # Transformations to obtain (co)variances
+  ###############################################################
+  
+  # Calculate the residual variance
+  sigma.y <- 1 / psi.y
+  
+}

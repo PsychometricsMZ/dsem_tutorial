@@ -1,0 +1,105 @@
+#################################################################
+  # AR(2) model for a single item (directly observed outcome)
+  # of a single person
+#################################################################
+
+model{
+
+  ###############################################################
+    # Likelihood (model definition)
+  ###############################################################
+
+  # Loop through time points t = 1...Nt
+  for(t in 1:Nt){
+    # Let the outcome y (item 10) at time t 
+    # follow a normal distribution
+    y[t] ~ dnorm(mu.y[t], psi.y)
+  }  
+
+  ####################### Time structure ########################
+  
+  # Set the mean of the outcome y at t=1 (intercept)
+  # to the alpha parameter
+  mu.y[1] <- alpha
+  
+  # Set the mean of the outcome y at t=2
+  # Define the centered version of outcome y at time t=1
+  y.center1[1] <- y[1] - alpha
+  # Use AR(1) structure for the mean
+  mu.y[2] <- alpha + beta[1] * y.center1[1] 
+  
+  # Loop through time points t = 3...Nt
+  # and define the mean structure of the outcome y for t>2
+  for(t in 3:Nt){
+    # Define the centered version of outcome y at time t-1
+    # by subtracting the intercept
+    y.center1[t-1] <- y[t-1] - alpha
+    # Define the centered version of outcome y at time t-1
+    y.center2[t-2] <- y[t-2] - alpha
+    # Let the mean of outcome y follow an AR(2) structure
+    mu.y[t] <- alpha + beta[1] * y.center1[t-1] + beta[2] * y.center2[t-2] 
+  }
+
+
+  ###############################################################
+    # Priors
+  ###############################################################
+
+  # Let the residual precision follow a gamma distribution
+  psi.y ~ dgamma(1, 1)
+
+  ####################### Time structure ########################
+  
+  # Let the AR(2) parameter alpha follow a normal distribution
+  alpha ~ dnorm(0, 0.1)
+  # Let the AR(2) parameter beta[1] follow a uniform distribution
+  beta[1]  ~ dunif(-1, 1)
+  # Let the AR(2) parameter beta[2] follow a uniform distribution
+  beta[2]  ~ dunif(-1, 1)
+
+  
+  ###############################################################
+    # Transformations to obtain (co)variances
+  ###############################################################
+
+  # Calculate the residual variance by taking the inverse of psi.y
+  sigma.y <- 1 / psi.y
+
+
+  ###############################################################
+  # Posterior predictive model checking (PPMC)
+  ###############################################################
+  
+  # Loop through time points t = 1...Nt
+  for(t in 1:Nt){
+    # Calculate the log-density of y[t] at time point t
+    # given mean mu.y[t] and precision psi.y
+    loglik0[t] <- logdensity.norm(y[t], mu.y[t], psi.y)
+    # NOTE: relevant for WAIC (Widely Applicable Information Criterion)
+    #       and LOO (Leave-One-Out cross-validation):
+  }
+
+  # Sum up the log-likelihoods across all time points
+  loglik <- sum(loglik0[1:Nt])
+
+  # Generate replicated data ystar based on the model 
+  # to compare with observed data
+
+  # Loop through time points t = 1...Nt
+  for(t in 1:Nt){
+    # Simulate replicated data ystar[t] from a normal distribution
+    # with mean mu.y[t] and precision psi.y
+    ystar[t] ~ dnorm(mu.y[t], psi.y)
+    # Calculate the log-density for the replicated data
+    loglikstar0[t] <- logdensity.norm(ystar[t], mu.y[t], psi.y)
+  }
+
+  # Sum up the log-likelihoods for the replicated data
+  loglikstar <- sum(loglikstar0[1:Nt])
+
+  # Calculate the PPMC indicator: if the observed log-likelihood
+  # is greater than the replicated log-likelihood, 
+  # set ppmc = 1, otherwise 0
+  ppmc <- ifelse(loglik > loglikstar, 1, 0)
+
+}  

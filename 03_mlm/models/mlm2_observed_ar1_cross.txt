@@ -1,0 +1,120 @@
+#################################################################
+  # AR(1) model for a single item (directly observed outcome)  
+  # with person-specific random intercept and slope 
+  # and time-specific slope
+#################################################################
+
+model{
+
+  ###############################################################
+    # Likelihood (model definition)
+  ###############################################################
+
+  # Loop through each individual i = 1...N
+  for(t in 2:Nt){
+  
+    ########################## level 3 ##########################
+
+    # Let the time-specific random slope follow a 
+    # normal distribution
+    eps3[t] ~ dnorm(0, psi.eps3)
+
+  }    
+
+  # Loop through the number of participants/patients 1...N
+  for(i in 1:N){
+
+    ########################## level 2 ##########################
+    
+    # Let the person-specific random intercept and slope 
+    # follow a multivariate normal distribution 
+    # with mean vector mu.eps2[1:2] and 
+    # precision matrix psi.eps2[1:2,1:2]
+    eps2[i, 1:2] ~ dmnorm(mu.eps2[1:2], psi.eps2[1:2, 1:2])
+
+    ########################## level 1 ##########################
+
+    # Loop through each time point t = 1...Nt
+    for(t in 1:Nt){
+      # Let the outcome y (item 10) of person i at time t 
+      # follow a normal distribution
+      # with mean mu.y[i, t] and precision psi.eps
+      y[i, t] ~ dnorm(mu.y[i, t], psi.y)
+    }
+
+    ####################### Time structure ########################
+
+    # Add random intercept eps2[i, 1] to AR(1) parameter alpha
+    # to define a new alpha parameter
+    alpha.new[i] <- alpha + eps2[i, 1]
+
+    # Set the mean of the outcome y at t=1 (intercept)
+    # to the new alpha parameter
+    mu.y[i, 1] <- alpha.new[i]
+
+    # Define th mean structure of the outcome for t>1
+    # Loop through time points t=2...Nt
+    for(t in 2:Nt){
+      # Define the centered version of outcome y at time t-1
+      # by subtracting the intercept
+      y.center[i, t-1] <- y[i, t-1] - alpha.new[i]
+      # Add random slope eps2[i, 2] and random slope eps3[t]
+      # to AR(1) parameter beta to define a new beta parameter
+      beta.new[i, t] <- beta + eps2[i, 2] + eps3[t]
+      # Let the mean of outcome y follow an AR(1) structure
+      mu.y[i, t] <- alpha.new[i] + beta.new[i, t] * y.center[i, t-1]
+    }
+
+  }
+
+
+  ###############################################################
+    # Priors
+  ###############################################################
+
+  # Let the residual precision follow a gamma distribution
+  psi.y ~ dgamma(1, 1)
+
+  # Let the precision of person-specific random effects 
+  # follow a Wishart distribution
+  psi.eps2[1:2, 1:2] ~ dwish(psi0, 2)
+
+  ## Let the precision of time-specific random slope
+  # follow a gamma distribution 
+  psi.eps3 ~ dgamma(1,1)
+  
+  ####################### Time structure ########################
+
+  # Let the AR(1) parameter alpha follow a normal distribution
+  alpha ~ dnorm(0, 0.1)
+  # Let the AR(1) parameter beta follow a uniform distribution
+  beta  ~ dunif(-1, 1)
+
+
+  ###############################################################
+    # Transformations to obtain (co)variances
+  ###############################################################
+  
+  # Calculate the residual variance
+  sigma.y <- 1 / psi.y
+
+  # Calculate the covariance matrix of the person-specific 
+  # random effects
+  sigma.eps2[1:2, 1:2] <- inverse(psi.eps2[1:2, 1:2])
+
+  # Calculate the variance of time-specific random slope
+  sigma.eps3 <- 1 / psi.eps3
+
+  # Calculate correlation matrix of the person-specific random effects
+  # Loop through number of person-specific random effects 1...2
+  for(k in 1:2){
+    # Loop through number of person-specific random effects 1...2 again
+    for(j in 1:2){
+      # Calculate the correlation between random effect k and j
+      # by dividing their covariance sigma.eps2[k, j] by the
+      # square root of the product of their variances
+      rho.eps2[k, j] <- sigma.eps2[k, j] / sqrt(sigma.eps2[k, k] * sigma.eps2[j, j])
+    }
+  }
+  
+}

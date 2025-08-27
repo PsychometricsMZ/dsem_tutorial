@@ -1,0 +1,168 @@
+#################################################################
+  # CFA model for 4 factors with 3 indicators each
+#################################################################
+
+model{
+
+  ###############################################################
+    # Likelihood (model definition)
+  ###############################################################
+  
+  # Loop through each individual i = 1...N
+  for(i in 1:N){
+    # Loop through each indicator j = 1...12
+    for(j in 1:12){
+      # Let the outcome y of person i and indicator j
+      # follow a normal distribution with
+      # mean mu.y[i, j] and precision psi.y[j]
+       y[i, j] ~ dnorm(mu.y[i, j], psi.y[j])
+    }
+
+    # Let the latent factors 1 to 4
+    # follow a multivariate normal distribution
+    # with mean mu.eta[1:4] and precision psi.eta[1:4, 1:4]
+    eta[i, 1:4] ~ dmnorm(mu.eta[1:4], psi.eta[1:4, 1:4])
+
+    ##################### Factor structure ######################
+     
+    # Define the mean structure of the outcome y
+    # through factor loadings lambda.y and intercepts nu.y
+    # using the first indicator per factor for scaling
+
+    # Let the first latent factor eta[i, 1] load on 
+    # indicators 1 to 3 (BAI scale)
+    mu.y[i, 1] <-                          eta[i, 1]
+    mu.y[i, 2] <- nu.y[1] + lambda.y[1] * eta[i, 1]
+    mu.y[i, 3] <- nu.y[2] + lambda.y[2] * eta[i, 1]
+    
+    # Let the second latent factor eta[i,2] load on
+    #  indicators 4 to 6 (WAI sub-scale TASK)
+    mu.y[i, 4] <-                          eta[i, 2]
+    mu.y[i, 5] <- nu.y[3] + lambda.y[3] * eta[i, 2]
+    mu.y[i, 6] <- nu.y[4] + lambda.y[4] * eta[i, 2]
+    
+    # Let the third latent factor eta[i,3] load on 
+    # indicators 7 to 9 (WAI sub-scale GOAL)
+    mu.y[i, 7] <-                          eta[i, 3]
+    mu.y[i, 8] <- nu.y[5] + lambda.y[5] * eta[i, 3]
+    mu.y[i, 9] <- nu.y[6] + lambda.y[6] * eta[i, 3]
+    
+    # Let the forth latent factor eta[i,4] load on 
+    # indicators 10 to 12 (WAI sub-scale BOND)
+    mu.y[i, 10] <-                          eta[i, 4]
+    mu.y[i, 11] <- nu.y[7] + lambda.y[7] * eta[i, 4]
+    mu.y[i, 12] <- nu.y[8] + lambda.y[8] * eta[i, 4]
+
+  }
+  
+
+  ###############################################################
+    # Priors
+  ###############################################################
+  
+  # Loop through each indicator j = 1....12
+  for(j in 1:12){
+    # Let the residual precision of indicator j 
+    # follow a gamma distribution
+    psi.y[j] ~ dgamma(1, 1)
+  }
+  
+  # Loop through the number of latent factors m = 1...4
+  for(m in 1:4){
+    # Let each factor mean follow a normal distribution
+    mu.eta[m] ~ dnorm(0, 0.01)
+  }
+  
+  # Let the precision matrix of the latent factors
+  # follow a Wishart distribution with hyperprior psi0
+  psi.eta[1:4,1:4] ~ dwish(psi0, 4)
+
+  ###################### Factor structure #######################
+
+  # Loop through the number of free factor loadings 
+  # and intercepts l = 1..8
+  for(l in 1:8){
+    # Let each factor loading follow a normal distribution
+    # truncated from below at 0
+    lambda.y[l] ~ dnorm(0.5, 1)I(0,)
+    # Let each intercept follow a normal distribution
+    nu.y[l] ~ dnorm(0, 0.01)
+  }
+  
+
+  ###############################################################
+    # Transformations to obtain (co)variances
+  ###############################################################
+
+  # Loop through each indicator j = 1....12
+  for(j in 1:12){
+    # Calculate the residual variance of indicator j
+    sigma.eps[j] <- 1 / psi.y[j]
+  }
+  
+  # Calculate covariance matrix of the latent factors
+  sigma.eta[1:4, 1:4] <- inverse(psi.eta[1:4, 1:4])
+  
+  # Calculate the correlation matrix of the latent factors
+  # Loop through the number of factors k = 1...4
+  for(k in 1:4){
+    # Loop through the number of factors m = 1...4 again
+    for(m in 1:4){
+      # Calculate the correlation between factors k and m
+      # by dividing their covariance sigma.eta[k, m] by the
+      # square root of the product of their variances
+      rho.eta[k, m] <- sigma.eta[k, m] / sqrt(sigma.eta[k, k] 
+                            * sigma.eta[m, m])
+    }
+  }
+
+
+  ###############################################################
+    # Standardize factor loadings
+  ###############################################################
+
+  # Calculate the standardized factor loadings 
+  # lambda.y.strd[indicator_index]
+  # by multiplying with the standard deviation of 
+  # the according factor
+  # -> the square root of the variance sigma.eta[factor_index]
+  # and dividing by the standard deviation of 
+  # the according indicator
+  # -> the square root of the squared factor loading 
+  #   lambda.y[loading_index]^2 multiplied with the
+  #   variance sigma.eta[factor_index] plus the 
+  #   residual variance sigma.eps[indicator_index]
+
+  # Loop through the number of factors m = 1...4
+  for(m in 1:4){
+    # Define the index of the first indicator of factor m
+    index_indicator_1[m] <- (m - 1) * 3 + 1
+    # Calculate the standardized factor loadings for 
+    # the first indicator  which was used for scaling
+    lambda.y.strd[(m - 1) * 3 + 1] <- (1 * sqrt(sigma.eta[m, m]) 
+                / sqrt(sigma.eta[m, m] + sigma.eps[index_indicator_1[m]]))
+    
+    # Define the index of the second indicator of factor m
+    index_indicator_2[m] <- (m - 1) * 3 + 2
+    # Define the index of the according factor loading
+    index_loading_2[m] <- (m - 1) * 2 + 1
+    # Calculate the standardized factor loadings for 
+    # the second indicator
+    lambda.y.strd[(m - 1) * 3 + 2] <- (lambda.y[index_loading_2[m]] 
+                * sqrt(sigma.eta[m, m]) 
+                / sqrt(lambda.y[index_loading_2[m]]^2 * sigma.eta[m, m] 
+                   + sigma.eps[index_indicator_2[m]]))
+
+    # Define the index of the third indicator of factor m
+    index_indicator_3[m] <- (m - 1) * 3 + 3
+    # Define the index of the according factor loading
+    index_loading_3[m] <- (m - 1) * 2 + 2
+    # Calculate the standardized factor loadings for 
+    # the third indicator
+    lambda.y.strd[(m - 1) * 3 + 3] <- (lambda.y[index_loading_3[m]] 
+                * sqrt(sigma.eta[m, m]) 
+                / sqrt(lambda.y[index_loading_3[m]]^2 * sigma.eta[m, m] 
+                    + sigma.eps[index_indicator_3[m]]))
+  }
+
+}

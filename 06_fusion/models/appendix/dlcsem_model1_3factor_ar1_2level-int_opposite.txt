@@ -1,0 +1,257 @@
+model{
+
+#################################################################
+  # Latent state switching AR(1) 2-level model
+  # with person-specific factor structure
+  # with state 1 corresponding to three factors
+  # with state 2 corresponding to a single factor
+#################################################################
+
+  # Set the probability of transitioning from state 2 to state 1
+  # P(S_t = 1 | S_t-1 = 2)
+  P2[1] ~ dunif(0, .1)
+  # Note: this can also be changed, e.g., with priors such as
+  # P2[1] <- 0.05
+
+  # Set the probability of remaining in state 2
+  # P(S_t = 2 | S_t-1 = 2)
+  P2[2] <- 1 - P2[1]
+
+
+  ###############################################################
+    # Likelihood (model definition)
+  ###############################################################
+
+  # Loop through each individual i = 1...N
+  for(i in 1:N){
+
+    ########################## level 2 ##########################
+    
+    # Let the person-specific random intercept
+    # follow a (multi)variate state-specific normal distribution 
+    # with mean(s) 0 and precision psi.zeta21.S1/.S2
+    zeta21.S1[i]     ~ dnorm(0,psi.zeta21.S1)
+    zeta21.S2[i,1:3] ~ dmnorm(mu.zeta2[1:3],psi.zeta21.S2[1:3,1:3])
+    ########################################## level 1 ##########################################
+
+    ########################## level 1 ##########################
+
+    # Loop through each time point t = 1...Nt
+
+    for (t in 1:Nt) {
+      for (j in 4:12) {
+        # Let the outcome y of indicator j (WAI items)
+        # at time t follow a normal distribution
+        # with mean mu.y[i, t, j, S[i, t]] and precision psi.y[j]
+        y[i,t,j] ~ dnorm(mu.y[i,t,j,S[i,t]],psi.y[j])
+      }
+
+      # Let latent factors eta of states 1 and 2
+      # at time t for person i follow normal distributions
+      # with a three-factor model in state 1 and a single-factor model in state 2
+      eta.S1[i,t]     ~  dnorm(mu.eta.S1[i,t],psi.eta.S1)
+      eta.S2[i,t,1:3] ~ dmnorm(mu.eta.S2[i,t,1:3],psi.eta.S2[1:3,1:3])
+    }
+
+   ###################### State transition #######################
+    
+    # Let all persons start in state 1 at time t = 1
+    S[i, 1] <- 1
+    
+    # Loop through remaining time points t = 2...Nt
+    for(t in 2:Nt){
+      # Logistic model for the probability of remaining in state 1
+      # P(S_t = 1|S_t-1 = 1) using the information from the factors
+      # under state S = 1
+      logit(P1[i, t, 1]) <- b2[1] + 
+                          b2[2]*eta.center.S1[i,t-1]
+
+      # Set the probability of transitioning from state 1 to state 2
+      # P(S_t = 2 | S_t-1 = 1)
+      P1[i, t, 2] <- 1 - P1[i, t, 1]
+      
+      # Define the transition matrix depending on the previous state:
+      # If person i was in state 1 at time t-1 (S[i, t-1] == 1) 
+      # -> use P1[i, t, 1:2]
+      # If person i was in state 2 at time t-1 -> use P2[1:2]
+      PS[i, t, 1:2] <- ifelse(S[i, t-1]==1, P1[i, t, 1:2], P2[1:2])
+      
+      # Sample the states from a categorical distribution
+      S[i, t] ~ dcat(PS[i, t, 1:2]) 
+    }
+
+
+     ####################### Time structure #######################
+
+    # Add random intercept zeta21 to AR(1) alpha parameter
+    # for both states
+    alpha.S1.new[i] <- alpha.S1 + zeta21.S1[i]
+    for(j in 1:3){
+      alpha.S2.new[i,j] <- alpha.S2[j] + zeta21.S2[i,j]
+    }
+    
+    
+    # Set the mean of the factor etas at t=1 (intercept)
+    # to the new alpha parameter
+    mu.eta.S1[i, 1] <- alpha.S1.new[i]
+    for(j in 1:3){
+      mu.eta.S2[i, 1,j] <- alpha.S2.new[i,j]
+    }
+
+    # Define the mean structure of the outcome for t>1
+    # Loop through time points 2...Nt
+    for(t in 2:Nt){      
+      # Define the centered version of factors eta.S1 and eta.S2
+      eta.center.S1[i, t-1] <- eta.S1[i, t-1] - alpha.S1.new[i]
+      for(j in 1:3){
+        eta.center.S2[i, t-1,j] <- eta.S2[i, t-1,j] - alpha.S2.new[i,j]
+      }
+      
+      # Let the conditional mean of factor eta.S1 follow an AR(1) structure
+      mu.eta.S1[i, t] <- alpha.S1.new[i] + beta.S1 * eta.center.S1[i, t-1]
+      
+      # Let the conditional mean of factor eta.S2 follow an AR(1) structure with a general 
+      # pattern of cross-lagged regression coefficients
+      for(j in 1:3){
+        mu.eta.S2[i, t, j] <- alpha.S2.new[i,j] +
+                              beta.S2[1,j] * eta.center.S2[i,t-1,1] +
+                              beta.S2[2,j] * eta.center.S2[i,t-1,2] +
+                              beta.S2[3,j] * eta.center.S2[i,t-1,3] 
+      }
+    }
+    
+    ##################### Factor structure ######################
+
+    # Loop through time points t = 1...Nt
+    # and define the mean structure for the Factor structure 
+    # (invariant over time, no AR structure)
+    for(t in 1:Nt){
+      # Let the factor eta.S1 load on indicators 4 to 12
+      # with the different factor loadings than for eta.S2
+      mu.y[i,t,4,1] <-                              eta.S1[i,t]
+      mu.y[i,t,5,1] <-  nu.y.S1[1] + lambda.y.S1[1]*eta.S1[i,t]
+      mu.y[i,t,6,1] <-  nu.y.S1[2] + lambda.y.S1[2]*eta.S1[i,t]
+      mu.y[i,t,7,1] <-  nu.y.S1[3] + lambda.y.S1[3]*eta.S1[i,t]
+      mu.y[i,t,8,1] <-  nu.y.S1[4] + lambda.y.S1[4]*eta.S1[i,t]
+      mu.y[i,t,9,1] <-  nu.y.S1[5] + lambda.y.S1[5]*eta.S1[i,t]
+      mu.y[i,t,10,1] <- nu.y.S1[6] + lambda.y.S1[6]*eta.S1[i,t]
+      mu.y[i,t,11,1] <- nu.y.S1[7] + lambda.y.S1[7]*eta.S1[i,t]
+      mu.y[i,t,12,1] <- nu.y.S1[8] + lambda.y.S1[8]*eta.S1[i,t]
+
+      # Let the factor eta.S2[,,1] load on indicators 4 to 6
+      # Let the factor eta.S2[,,2] load on indicators 7 to 9
+      # Let the factor eta.S2[,,3] load on indicators 10 to 12
+      # using the first indicator for scaling
+      mu.y[i,t,4,2] <-                              eta.S2[i,t,1]
+      mu.y[i,t,5,2] <-  nu.y.S2[1] + lambda.y.S2[1]*eta.S2[i,t,1]
+      mu.y[i,t,6,2] <-  nu.y.S2[2] + lambda.y.S2[2]*eta.S2[i,t,1]
+      mu.y[i,t,7,2] <-                              eta.S2[i,t,2]
+      mu.y[i,t,8,2] <-  nu.y.S2[3] + lambda.y.S2[3]*eta.S2[i,t,2]
+      mu.y[i,t,9,2] <-  nu.y.S2[4] + lambda.y.S2[4]*eta.S2[i,t,2]
+      mu.y[i,t,10,2] <-                             eta.S2[i,t,3]
+      mu.y[i,t,11,2] <- nu.y.S2[5] + lambda.y.S2[5]*eta.S2[i,t,3]
+      mu.y[i,t,12,2] <- nu.y.S2[6] + lambda.y.S2[6]*eta.S2[i,t,3]
+    }
+  }
+    
+  ###############################################################
+    # Priors
+  ###############################################################
+
+  # Loop through each indicator j = 4..12
+  for(j in 4:12){
+    # Let the residual precision of indicator j 
+    # follow a gamma distribution
+    psi.y[j] ~ dgamma(1, 1)
+  }
+
+  # Let the precision of factor eta.S1
+  # follow a gamma distribution
+  psi.eta.S1 ~ dgamma(1, 1)
+  # Let the precision matrix of factor eta.S2
+  # follow a wishart distribution with hyperparameter psi0 and df=3
+  psi.eta.S2[1:3,1:3] ~ dwish(psi0[1:3,1:3],3)
+  
+  
+  # Let the precision of random intercept state 1
+  # follow a gamma distribution
+  psi.zeta21.S1 ~ dgamma(1,1)
+  # Let the precision of random intercept state 2 follow a 
+  # wishart distribution with hyperparameter psi0 and df=3
+  psi.zeta21.S2[1:3,1:3] ~ dwish(psi0[1:3,1:3],3)
+ 
+  ####################### Time structure ########################
+
+  # Let the intercept alpha.S1 and alpha .S2 follow a normal distribution
+  alpha.S1  ~ dnorm(0,0.1)
+  for(j in 1:3){
+    alpha.S2[j] ~ dnorm(0,0.1)
+  }
+  
+  # Let the autoregressive coefficient beta follow a uniform
+  # distribution 
+  beta.S1  ~ dunif(-1,1)
+  for(j in 1:3){
+    for(k in 1:3){
+      beta.S2[j,k] ~ dunif(-1,1)
+    }
+  }
+
+  ###################### Factor structure #######################
+
+
+  # Loop through free factor loadings and intercepts l = 1..8
+  # in state 1
+  for(l in 1:8){
+    # Let each factor loading follow a normal distribution
+    # truncated from below at 0
+    lambda.y.S1[l] ~ dnorm(0.5,1)I(0,)
+    # Let each factor loading follow a normal distribution
+    nu.y.S1[l] ~ dnorm(0, 0.01)
+  }
+
+  # Loop through free factor loadings and intercepts l = 1..6
+  # in state 2
+  for(l in 1:6){
+    # Let each factor loading follow a normal distribution
+    # truncated from below at 0
+    lambda.y.S2[l] ~ dnorm(0.5,1)I(0,)
+    # Let each factor loading follow a normal distribution
+    nu.y.S2[l] ~ dnorm(0, 0.01)
+  }
+  
+  ###################### State transition #######################
+
+  # Let the transition intercept follow a normal distribution
+  b2[1] ~ dnorm(0, 0.01)
+  # Let the transition slopes follow a normal distribution
+  b2[2]  ~ dnorm(0,1)
+
+  ###############################################################
+    # Transformations to obtain (co)variances
+  ###############################################################
+  
+  # Loop through each indicator j = 1..3
+  for(j in 1:9){
+    # Calculate the residual variance of indicator j
+    sigma.y[j] <- 1 / psi.y[j+3]
+  }
+
+  # Calculate the variance of factors eta.S1 and eta.S2
+  sigma.eta.S1 <- 1 / psi.eta.S1
+  sigma.eta.S2[1:3,1:3] <- inverse(psi.eta.S2[1:3,1:3])
+  
+  # Calculate the variance of the random slope
+  sigma.zeta21.S1 <- 1 / psi.zeta21.S1
+  sigma.zeta21.S2[1:3,1:3] <- inverse(psi.zeta21.S2[1:3,1:3])
+
+
+  # Loop through the number of participants/patients 1...N
+  for(i in 1:N){
+    # Calculate the average S[i,t] as a proxy for switching
+    St[i] <- Nt + 1 - mean(S[i, 1:(Nt)] - 1) * Nt
+    # Save the final state membership
+    Send[i] <- S[i, Nt]
+  }
+
+}
